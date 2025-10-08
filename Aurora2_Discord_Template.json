@@ -1,0 +1,39 @@
+{
+  "categories": [
+    {
+      "name": "📜・BINE AI VENIT",
+      "text_channels": ["👋・bun-venit", "📜・reguli", "📢・anunturi", "🧭・ghid-server", "🌐・link-uri-utile"],
+      "voice_channels": []
+    },
+    {
+      "name": "💬 COMUNITATE",
+      "text_channels": ["💬・chat-general", "🖼️・media", "🎯・intrebari", "🎉・realizari", "🤖・bot-commands"],
+      "voice_channels": []
+    },
+    {
+      "name": "⚔️ JOCUL",
+      "text_channels": ["🧝・update-uri", "🧭・eventuri", "🛡️・informatii-bresle", "🗺️・hărți", "💎・sisteme"],
+      "voice_channels": []
+    },
+    {
+      "name": "🏪 MARKETPLACE",
+      "text_channels": ["💰・vanzari", "🧾・cumparari", "🔄・schimburi", "🛍️・itemshop-discutii"],
+      "voice_channels": []
+    },
+    {
+      "name": "🆘SUPORT",
+      "text_channels": ["🎫・ticket-system", "❓・intrebari-tehnice", "🧩・bug-report", "🧑‍💼・apel-staff", "🗂️・ticket-logs" ],
+      "voice_channels": []
+    },
+    {
+      "name": "🎙️ VOICE CHANNELS",
+      "text_channels": [],
+      "voice_channels": ["🎧・General Voice", "⚔️・Aurora Squad 1", "⚔️・Aurora Squad 2", "🏹・Event Voice", "🗣️・Guild #1", "🗣️・Guild #2", "🗣️・Guild #3"]
+    },
+    {
+      "name": "🧑‍💼・STAFF ZONE",
+      "text_channels": ["🧱・staff-chat", "📋・rapoarte", "🧩・discutii-gm"],
+      "voice_channels": ["🔒・staff-voice"]
+    }
+  ]
+}
