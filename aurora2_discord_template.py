@@ -5,6 +5,8 @@ from discord.ext import commands
 from discord.ui import View, Select, Button
 from datetime import datetime
 import asyncio
+import threading
+from flask import Flask
 
 # ===== CONFIG =====
 TOKEN = os.environ["DISCORD_TOKEN"]
@@ -241,6 +243,21 @@ async def on_member_join(member):
             print(f"✅ Rol „Membru Aurora2” adăugat pentru {member.name}")
         except discord.Forbidden:
             print(f"❌ Nu am permisiunea de a adăuga rolul pentru {member.name}")
+
+# ======= render webserver =======
+
+app = Flask("Aurora2_Discord-Bot")
+
+@app.route("/")
+def home():
+    return "Aurora2 Discord Bot is running!"
+
+def run_webserver():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
+
+
+threading.Thread(target=run_webserver).start()
 
 # ===== RUN BOT =====
 bot.run(TOKEN)
