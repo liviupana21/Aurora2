@@ -128,51 +128,51 @@ class TicketDropdown(Select):
         super().__init__(placeholder="Selectează tipul de ticket 🎫", options=options)
 
     async def callback(self, interaction: discord.Interaction):
-    try:
-        guild = interaction.guild
-        category = discord.utils.get(guild.categories, name=TICKET_CATEGORY)
-        if not category:
-            category = await guild.create_category(TICKET_CATEGORY)
+        try:
+            guild = interaction.guild
+            category = discord.utils.get(guild.categories, name=TICKET_CATEGORY)
+            if not category:
+                category = await guild.create_category(TICKET_CATEGORY)
 
-        ticket_number = get_ticket_number(interaction.user, self.values[0])
-        channel_name = f"ticket-{ticket_number}"
+            ticket_number = get_ticket_number(interaction.user, self.values[0])
+            channel_name = f"ticket-{ticket_number}"
 
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
-            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True)
-        }
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
+                guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True)
+            }
 
-        ticket_channel = await guild.create_text_channel(channel_name, category=category, overwrites=overwrites)
+            ticket_channel = await guild.create_text_channel(channel_name, category=category, overwrites=overwrites)
 
         # Add Close Ticket button
-        close_button = CloseTicketButton()
-        view = View()
-        view.add_item(close_button)
+            close_button = CloseTicketButton()
+            view = View()
+            view.add_item(close_button)
 
-        await ticket_channel.send(
-            f"🎫 Ticket creat de {interaction.user.mention}\nTip: **{self.values[0]}**",
-            view=view
-        )
-        await interaction.response.send_message(f"✅ Ticket creat: {ticket_channel.mention}", ephemeral=True)
+            await ticket_channel.send(
+                f"🎫 Ticket creat de {interaction.user.mention}\nTip: **{self.values[0]}**",
+                view=view
+            )
+            await interaction.response.send_message(f"✅ Ticket creat: {ticket_channel.mention}", ephemeral=True)
 
         # Log ticket creation
-        log_channel = discord.utils.get(guild.text_channels, name=TICKET_LOG_CHANNEL)
-        if log_channel:
-            embed = discord.Embed(
-                title="🗂️ Ticket deschis",
-                color=discord.Color.green(),
-                timestamp=datetime.utcnow()
-            )
-            embed.add_field(name="Tip ticket", value=self.values[0], inline=False)
-            embed.add_field(name="Deschis de", value=interaction.user.mention, inline=False)
-            embed.add_field(name="Canal", value=ticket_channel.mention, inline=False)
-            await log_channel.send(embed=embed)
+            log_channel = discord.utils.get(guild.text_channels, name=TICKET_LOG_CHANNEL)
+            if log_channel:
+                embed = discord.Embed(
+                    title="🗂️ Ticket deschis",
+                    color=discord.Color.green(),
+                    timestamp=datetime.utcnow()
+                )
+                embed.add_field(name="Tip ticket", value=self.values[0], inline=False)
+                embed.add_field(name="Deschis de", value=interaction.user.mention, inline=False)
+                embed.add_field(name="Canal", value=ticket_channel.mention, inline=False)
+                await log_channel.send(embed=embed)
 
-    except Exception as e:
-        print(f"Error in ticket dropdown callback: {e}")
-        if not interaction.response.is_done():
-            await interaction.response.send_message("❌ A apărut o eroare la crearea ticketului.", ephemeral=True)
+        except Exception as e:
+            print(f"Error in ticket dropdown callback: {e}")
+            if not interaction.response.is_done():
+                await interaction.response.send_message("❌ A apărut o eroare la crearea ticketului.", ephemeral=True)
 
 class TicketView(View):
     def __init__(self):
