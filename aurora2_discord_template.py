@@ -20,7 +20,7 @@ ROLE_DEFS = [
     {"name": "Owner", "permissions": discord.Permissions.all()},
     {"name": "Developer", "permissions": discord.Permissions(kick_members=True, ban_members=True, mute_members=True, deafen_members=True, move_members=True)},
     {"name": "Tehnician", "permissions": discord.Permissions(kick_members=True, ban_members=True, mute_members=True, deafen_members=True, move_members=True)},
-    {"name": "Moderator discord", "permissions": discord.Permissions.(administrator=True)},
+    {"name": "Moderator discord", "permissions": discord.Permissions(administrator=True)},
     {"name": "Membru Aurora2", "permissions": discord.Permissions(read_messages=True, send_messages=True, connect=True, create_instant_invite=True)},
     {"name": "Lider Breasla", "permissions": discord.Permissions(read_messages=True, send_messages=True, connect=True)},
     {"name": "Membru Breasla", "permissions": discord.Permissions(read_messages=True, send_messages=True, connect=True)}
