@@ -5,17 +5,17 @@ from discord.ext import commands
 from discord.ui import View, Select, Button
 from datetime import datetime
 import asyncio
-import threading
-from flask import Flask
 
 # ===== CONFIG =====
 TOKEN = os.environ["DISCORD_TOKEN"]
 GUILD_ID = int(os.environ["GUILD_ID"])
 TICKET_PANEL_CHANNEL = os.environ.get("TICKET_PANEL_CHANNEL", "🎫・ticket-system")
 TICKET_LOG_CHANNEL = os.environ.get("TICKET_LOG_CHANNEL", "🗂️・ticket-logs")
+INVITE_LOG_CHANNEL = os.environ.get("INVITE_LOG_CHANNEL", "📈・logs-invitatii")
 TICKET_CATEGORY = os.environ.get("TICKET_CATEGORY", "🆘SUPORT")
 COUNTER_FILE = "ticket_counter.json"
 JSON_TEMPLATE_FILE = "Aurora2_Discord_Template.json"
+INVITE_TRACKING = "invite_logs.json"
 
 # ===== SAFE TICKET COUNTER =====
 def ensure_counter_file():
@@ -49,6 +49,21 @@ def get_ticket_number(user=None, ticket_type=None):
         json.dump(data, f, indent=4)
 
     return ticket_number
+
+# ===== INVITE TRACKING =====
+def ensure_invite_file():
+    if not os.path.exists(INVITE_TRACKING) or os.path.getsize(INVITE_TRACKING) == 0:
+        with open(INVITE_TRACKING, "w") as f:
+            json.dump({}, f)
+
+def get_invites_data():
+    ensure_invite_file()
+    with open(INVITE_TRACKING, "r") as f:
+        return json.load(f)
+    
+def safe_invites_data(data):
+    with open(INVITE_TRACKING, "w") as f:
+        json.dump(data, f, indent=4)
 
 # ===== PREDEFINED ROLES =====
 ROLE_DEFS = [
@@ -130,51 +145,42 @@ class TicketDropdown(Select):
         super().__init__(placeholder="Selectează tipul de ticket 🎫", options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        try:
-            guild = interaction.guild
-            category = discord.utils.get(guild.categories, name=TICKET_CATEGORY)
-            if not category:
-                category = await guild.create_category(TICKET_CATEGORY)
+        guild = interaction.guild
+        category = discord.utils.get(guild.categories, name=TICKET_CATEGORY)
+        if not category:
+            category = await guild.create_category(TICKET_CATEGORY)
 
-            ticket_number = get_ticket_number(interaction.user, self.values[0])
-            channel_name = f"ticket-{ticket_number}"
+        ticket_number = get_ticket_number(interaction.user, self.values[0])
+        channel_name = f"ticket-{ticket_number}"
 
-            overwrites = {
-                guild.default_role: discord.PermissionOverwrite(view_channel=False),
-                interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
-                guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True)
-            }
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
+            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True)
+        }
 
-            ticket_channel = await guild.create_text_channel(channel_name, category=category, overwrites=overwrites)
+        ticket_channel = await guild.create_text_channel(channel_name, category=category, overwrites=overwrites)
 
         # Add Close Ticket button
-            close_button = CloseTicketButton()
-            view = View()
-            view.add_item(close_button)
+        close_button = CloseTicketButton()
+        view = View()
+        view.add_item(close_button)
 
-            await ticket_channel.send(
-                f"🎫 Ticket creat de {interaction.user.mention}\nTip: **{self.values[0]}**",
-                view=view
-            )
-            await interaction.response.send_message(f"✅ Ticket creat: {ticket_channel.mention}", ephemeral=True)
+        await ticket_channel.send(f"🎫 Ticket creat de {interaction.user.mention}\nTip: **{self.values[0]}**", view=view)
+        await interaction.response.send_message(f"✅ Ticket creat: {ticket_channel.mention}", ephemeral=True)
 
         # Log ticket creation
-            log_channel = discord.utils.get(guild.text_channels, name=TICKET_LOG_CHANNEL)
-            if log_channel:
-                embed = discord.Embed(
-                    title="🗂️ Ticket deschis",
-                    color=discord.Color.green(),
-                    timestamp=datetime.utcnow()
-                )
-                embed.add_field(name="Tip ticket", value=self.values[0], inline=False)
-                embed.add_field(name="Deschis de", value=interaction.user.mention, inline=False)
-                embed.add_field(name="Canal", value=ticket_channel.mention, inline=False)
-                await log_channel.send(embed=embed)
-
-        except Exception as e:
-            print(f"Error in ticket dropdown callback: {e}")
-            if not interaction.response.is_done():
-                await interaction.response.send_message("❌ A apărut o eroare la crearea ticketului.", ephemeral=True)
+        log_channel = discord.utils.get(guild.text_channels, name=TICKET_LOG_CHANNEL)
+        if log_channel:
+            embed = discord.Embed(
+                title="🗂️ Ticket deschis",
+                color=discord.Color.green(),
+                timestamp=datetime.utcnow()
+            )
+            embed.add_field(name="Tip ticket", value=self.values[0], inline=False)
+            embed.add_field(name="Deschis de", value=interaction.user.mention, inline=False)
+            embed.add_field(name="Canal", value=ticket_channel.mention, inline=False)
+            await log_channel.send(embed=embed)
 
 class TicketView(View):
     def __init__(self):
@@ -185,10 +191,16 @@ class TicketView(View):
 @bot.event
 async def on_ready():
     print(f"✅ Bot conectat ca {bot.user}")
+    global invites_before
+    invites_before = {}
+
     guild = bot.get_guild(GUILD_ID)
     if not guild:
         print("❌ Serverul nu a fost găsit!")
         return
+    
+    for invite in await guild.invites():
+        invites_before[invite.code] = invite.uses
 
     # Create roles
     for role_def in ROLE_DEFS:
@@ -224,7 +236,7 @@ async def on_ready():
     if not panel_channel:
         panel_channel = await guild.create_text_channel(TICKET_PANEL_CHANNEL)
 
-    messages = [msg async for msg in panel_channel.history(limit=50)]
+    messages = await panel_channel.history(limit=50).flatten()
     panel_exists = any(msg.author == guild.me and msg.components for msg in messages)
 
     if not panel_exists:
@@ -243,6 +255,31 @@ async def on_member_join(member):
             print(f"✅ Rol „Membru Aurora2” adăugat pentru {member.name}")
         except discord.Forbidden:
             print(f"❌ Nu am permisiunea de a adăuga rolul pentru {member.name}")
+    
+    global invites_before
+    new_invites = await guild.invites()
+    inviter = None
+
+    for invite in new_invites:
+        if invite.code in invites_before:
+            if invite.code in invites_before:
+                if invite.uses > invites_before[invite.code]:
+                    inviter = invite.inviter
+                    invites_before[invite.code] = invite.uses
+                    break
+        else:
+            invites_before[invite.code] = invite.uses
+    if inviter:
+        data = get_invites_data()
+        user_id = str(inviter.id)
+        data[user_id] = data.get(user_id, 0) + 1
+        save_invites_data(data)
+
+        log_channel = discord.utils.get(guild.tex_channels, name=INVITE_LOG_CHANNEL)
+        if log_channel:
+            await log_channel.send(f"📨 {member.mention} a folosit invitația lui {inviter.mention}. Acum {inviter.mention} are un numar de {data[user_id]} invitatii!")
+        
+
 
 # ======= render webserver =======
 
