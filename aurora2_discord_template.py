@@ -5,6 +5,8 @@ from discord.ext import commands
 from discord.ui import View, Select, Button
 from datetime import datetime
 import asyncio
+import threading
+from flask import Flask
 
 # ===== CONFIG =====
 TOKEN = os.environ["DISCORD_TOKEN"]
