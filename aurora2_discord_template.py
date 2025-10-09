@@ -7,14 +7,13 @@ from datetime import datetime
 import asyncio
 
 # ===== CONFIG =====
-TOKEN = "MTQyNTU2MjM1NDA2MTU0NTU5Mw.GP2FAc.0kcpizBULRt3JcTuyqCCLXc0YzsNlsWb_k_LNE"
-GUILD_ID = 1423063052420513825
-TICKET_PANEL_CHANNEL = "ticket-system"
-TICKET_LOG_CHANNEL = "ticket-logs"
-TICKET_CATEGORY = "SUPORT"
+TOKEN = os.environ["DISCORD_TOKEN"]
+GUILD_ID = int(os.environ["GUILD_ID"])
+TICKET_PANEL_CHANNEL = os.environ.get("TICKET_PANEL_CHANNEL", "🎫・ticket-system")
+TICKET_LOG_CHANNEL = os.environ.get("TICKET_LOG_CHANNEL", "🗂️・ticket-logs")
+TICKET_CATEGORY = os.environ.get("TICKET_CATEGORY", "🆘SUPORT")
 COUNTER_FILE = "ticket_counter.json"
 JSON_TEMPLATE_FILE = "Aurora2_Discord_Template.json"
-
 # Roluri predefinite
 ROLE_DEFS = [
     {"name": "Owner", "permissions": discord.Permissions.all()},
