@@ -238,7 +238,7 @@ async def on_ready():
     if not panel_channel:
         panel_channel = await guild.create_text_channel(TICKET_PANEL_CHANNEL)
 
-    messages = await panel_channel.history(limit=50).flatten()
+    messages = [msg async for msg in panel_channel.history(limit=50)]
     panel_exists = any(msg.author == guild.me and msg.components for msg in messages)
 
     if not panel_exists:
