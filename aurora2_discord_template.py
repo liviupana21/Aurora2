@@ -1,5 +1,5 @@
-import json
 import os
+import json
 import discord
 from discord.ext import commands
 from discord.ui import View, Select
@@ -14,7 +14,41 @@ TICKET_LOG_CHANNEL = os.environ.get("TICKET_LOG_CHANNEL", "🗂️・ticket-logs
 TICKET_CATEGORY = os.environ.get("TICKET_CATEGORY", "🆘SUPORT")
 COUNTER_FILE = "ticket_counter.json"
 JSON_TEMPLATE_FILE = "Aurora2_Discord_Template.json"
-# Roluri predefinite
+
+# ===== SAFE TICKET COUNTER =====
+def ensure_counter_file():
+    if not os.path.exists(COUNTER_FILE) or os.path.getsize(COUNTER_FILE) == 0:
+        with open(COUNTER_FILE, "w") as f:
+            json.dump({"counter": 0, "tickets": []}, f)
+
+def get_ticket_number(user=None, ticket_type=None):
+    ensure_counter_file()
+    with open(COUNTER_FILE, "r") as f:
+        try:
+            data = json.load(f)
+        except json.JSONDecodeError:
+            data = {"counter": 0, "tickets": []}
+
+    data["counter"] += 1
+    ticket_number = data["counter"]
+
+    # log ticket creation
+    ticket_entry = {
+        "id": ticket_number,
+        "user": str(user) if user else "Unknown",
+        "type": ticket_type or "Unknown",
+        "created_at": datetime.utcnow().isoformat(),
+        "closed_at": None,
+        "closed_by": None
+    }
+    data.setdefault("tickets", []).append(ticket_entry)
+
+    with open(COUNTER_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+    return ticket_number
+
+# ===== PREDEFINED ROLES =====
 ROLE_DEFS = [
     {"name": "Owner", "permissions": discord.Permissions.all()},
     {"name": "Developer", "permissions": discord.Permissions(kick_members=True, ban_members=True, mute_members=True, deafen_members=True, move_members=True)},
@@ -32,27 +66,14 @@ intents.members = True
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ===== Load JSON Template =====
+# ===== LOAD JSON TEMPLATE =====
 if os.path.exists(JSON_TEMPLATE_FILE):
     with open(JSON_TEMPLATE_FILE, 'r', encoding='utf-8') as f:
         template = json.load(f)
 else:
     template = {"categories": []}
 
-# ===== Ticket counter =====
-if not os.path.exists(COUNTER_FILE):
-    with open(COUNTER_FILE, "w") as f:
-        json.dump({"counter": 0}, f)
-
-def get_ticket_number():
-    with open(COUNTER_FILE, "r") as f:
-        data = json.load(f)
-    data["counter"] += 1
-    with open(COUNTER_FILE, "w") as f:
-        json.dump(data, f)
-    return data["counter"]
-
-# ====== Ticket Dropdown/View ======
+# ===== TICKET DROPDOWN/VIEW =====
 class TicketDropdown(Select):
     def __init__(self):
         options = [
@@ -68,7 +89,7 @@ class TicketDropdown(Select):
         if not category:
             category = await guild.create_category(TICKET_CATEGORY)
 
-        ticket_number = get_ticket_number()
+        ticket_number = get_ticket_number(interaction.user, self.values[0])
         channel_name = f"ticket-{ticket_number}"
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
@@ -97,7 +118,7 @@ class TicketView(View):
         super().__init__(timeout=None)
         self.add_item(TicketDropdown())
 
-# ====== ON READY ======
+# ===== ON READY =====
 @bot.event
 async def on_ready():
     print(f"✅ Bot conectat ca {bot.user}")
@@ -144,7 +165,7 @@ async def on_ready():
     await panel_channel.send("🎫 **Selectează tipul de ticket din meniul de mai jos:**", view=view)
     print("✅ Ticket panel creat!")
 
-# ====== AUTO ROLE ======
+# ===== AUTO ROLE =====
 @bot.event
 async def on_member_join(member):
     guild = member.guild
@@ -156,7 +177,7 @@ async def on_member_join(member):
         except discord.Forbidden:
             print(f"❌ Nu am permisiunea de a adăuga rolul pentru {member.name}")
 
-# ====== CLOSE TICKET ======
+# ===== CLOSE TICKET =====
 @bot.tree.command(name="close_ticket", description="Închide ticketul curent")
 async def close_ticket(interaction: discord.Interaction):
     channel = interaction.channel
@@ -164,6 +185,24 @@ async def close_ticket(interaction: discord.Interaction):
         await interaction.response.send_message("❌ Aceasta nu este o cameră de ticket.", ephemeral=True)
         return
 
+    # Update JSON log
+    ensure_counter_file()
+    with open(COUNTER_FILE, "r") as f:
+        try:
+            data = json.load(f)
+        except json.JSONDecodeError:
+            data = {"counter": 0, "tickets": []}
+
+    for t in data.get("tickets", []):
+        if f"ticket-{t['id']}" == channel.name:
+            t["closed_at"] = datetime.utcnow().isoformat()
+            t["closed_by"] = str(interaction.user)
+            break
+
+    with open(COUNTER_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+    # Log closure in the Discord channel
     log_channel = discord.utils.get(interaction.guild.text_channels, name=TICKET_LOG_CHANNEL)
     if log_channel:
         embed = discord.Embed(
