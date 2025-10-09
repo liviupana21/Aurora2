@@ -1,0 +1,7 @@
+services:
+- type: web
+name: aurora2-bot
+env: python
+buildCommand: ""
+startCommand: "python aurora2_discord_template.py"
+plan: free
