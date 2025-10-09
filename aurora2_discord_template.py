@@ -2,7 +2,7 @@ import os
 import json
 import discord
 from discord.ext import commands
-from discord.ui import View, Select
+from discord.ui import View, Select, Button
 from datetime import datetime
 import asyncio
 
@@ -73,6 +73,50 @@ if os.path.exists(JSON_TEMPLATE_FILE):
 else:
     template = {"categories": []}
 
+# ===== CLOSE TICKET BUTTON =====
+class CloseTicketButton(Button):
+    def __init__(self):
+        super().__init__(style=discord.ButtonStyle.danger, label="Închide ticketul", emoji="🔒")
+
+    async def callback(self, interaction: discord.Interaction):
+        channel = interaction.channel
+        if not channel.name.startswith("ticket-"):
+            await interaction.response.send_message("❌ Aceasta nu este o cameră de ticket.", ephemeral=True)
+            return
+
+        # Update JSON log
+        ensure_counter_file()
+        with open(COUNTER_FILE, "r") as f:
+            try:
+                data = json.load(f)
+            except json.JSONDecodeError:
+                data = {"counter": 0, "tickets": []}
+
+        for t in data.get("tickets", []):
+            if f"ticket-{t['id']}" == channel.name:
+                t["closed_at"] = datetime.utcnow().isoformat()
+                t["closed_by"] = str(interaction.user)
+                break
+
+        with open(COUNTER_FILE, "w") as f:
+            json.dump(data, f, indent=4)
+
+        # Log closure in ticket log channel
+        log_channel = discord.utils.get(interaction.guild.text_channels, name=TICKET_LOG_CHANNEL)
+        if log_channel:
+            embed = discord.Embed(
+                title="🗂️ Ticket închis",
+                color=discord.Color.red(),
+                timestamp=datetime.utcnow()
+            )
+            embed.add_field(name="Canal", value=channel.name, inline=False)
+            embed.add_field(name="Închis de", value=interaction.user.mention, inline=False)
+            await log_channel.send(embed=embed)
+
+        await interaction.response.send_message("🔒 Ticketul va fi închis în 5 secunde...", ephemeral=True)
+        await asyncio.sleep(5)
+        await channel.delete()
+
 # ===== TICKET DROPDOWN/VIEW =====
 class TicketDropdown(Select):
     def __init__(self):
@@ -91,6 +135,7 @@ class TicketDropdown(Select):
 
         ticket_number = get_ticket_number(interaction.user, self.values[0])
         channel_name = f"ticket-{ticket_number}"
+
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
@@ -98,9 +143,16 @@ class TicketDropdown(Select):
         }
 
         ticket_channel = await guild.create_text_channel(channel_name, category=category, overwrites=overwrites)
-        await ticket_channel.send(f"🎫 Ticket creat de {interaction.user.mention}\nTip: **{self.values[0]}**")
+
+        # Add Close Ticket button
+        close_button = CloseTicketButton()
+        view = View()
+        view.add_item(close_button)
+
+        await ticket_channel.send(f"🎫 Ticket creat de {interaction.user.mention}\nTip: **{self.values[0]}**", view=view)
         await interaction.response.send_message(f"✅ Ticket creat: {ticket_channel.mention}", ephemeral=True)
 
+        # Log ticket creation
         log_channel = discord.utils.get(guild.text_channels, name=TICKET_LOG_CHANNEL)
         if log_channel:
             embed = discord.Embed(
@@ -127,7 +179,7 @@ async def on_ready():
         print("❌ Serverul nu a fost găsit!")
         return
 
-    # Creare roluri
+    # Create roles
     for role_def in ROLE_DEFS:
         role = discord.utils.get(guild.roles, name=role_def["name"])
         if not role:
@@ -136,7 +188,7 @@ async def on_ready():
         else:
             print(f"⚠️ Role existent: {role_def['name']}")
 
-    # Creare categorii + canale din JSON
+    # Create categories and channels from JSON template
     for category in template.get("categories", []):
         cat = discord.utils.get(guild.categories, name=category["name"])
         if not cat:
@@ -156,14 +208,18 @@ async def on_ready():
                 await guild.create_voice_channel(ch, category=cat)
                 print(f"✅ Voice channel creat: {ch}")
 
-    # Creare mesaj permanent cu dropdown în ticket-system
+    # Create ticket panel message if it doesn't exist
     panel_channel = discord.utils.get(guild.text_channels, name=TICKET_PANEL_CHANNEL)
     if not panel_channel:
         panel_channel = await guild.create_text_channel(TICKET_PANEL_CHANNEL)
 
-    view = TicketView()
-    await panel_channel.send("🎫 **Selectează tipul de ticket din meniul de mai jos:**", view=view)
-    print("✅ Ticket panel creat!")
+    messages = await panel_channel.history(limit=50).flatten()
+    panel_exists = any(msg.author == guild.me and msg.components for msg in messages)
+
+    if not panel_exists:
+        view = TicketView()
+        await panel_channel.send("🎫 **Selectează tipul de ticket din meniul de mai jos:**", view=view)
+        print("✅ Ticket panel creat!")
 
 # ===== AUTO ROLE =====
 @bot.event
@@ -176,47 +232,6 @@ async def on_member_join(member):
             print(f"✅ Rol „Membru Aurora2” adăugat pentru {member.name}")
         except discord.Forbidden:
             print(f"❌ Nu am permisiunea de a adăuga rolul pentru {member.name}")
-
-# ===== CLOSE TICKET =====
-@bot.tree.command(name="close_ticket", description="Închide ticketul curent")
-async def close_ticket(interaction: discord.Interaction):
-    channel = interaction.channel
-    if not channel.name.startswith("ticket-"):
-        await interaction.response.send_message("❌ Aceasta nu este o cameră de ticket.", ephemeral=True)
-        return
-
-    # Update JSON log
-    ensure_counter_file()
-    with open(COUNTER_FILE, "r") as f:
-        try:
-            data = json.load(f)
-        except json.JSONDecodeError:
-            data = {"counter": 0, "tickets": []}
-
-    for t in data.get("tickets", []):
-        if f"ticket-{t['id']}" == channel.name:
-            t["closed_at"] = datetime.utcnow().isoformat()
-            t["closed_by"] = str(interaction.user)
-            break
-
-    with open(COUNTER_FILE, "w") as f:
-        json.dump(data, f, indent=4)
-
-    # Log closure in the Discord channel
-    log_channel = discord.utils.get(interaction.guild.text_channels, name=TICKET_LOG_CHANNEL)
-    if log_channel:
-        embed = discord.Embed(
-            title="🗂️ Ticket închis",
-            color=discord.Color.red(),
-            timestamp=datetime.utcnow()
-        )
-        embed.add_field(name="Canal", value=channel.name, inline=False)
-        embed.add_field(name="Închis de", value=interaction.user.mention, inline=False)
-        await log_channel.send(embed=embed)
-
-    await interaction.response.send_message("🔒 Ticketul va fi închis în 5 secunde...", ephemeral=True)
-    await asyncio.sleep(5)
-    await channel.delete()
 
 # ===== RUN BOT =====
 bot.run(TOKEN)
