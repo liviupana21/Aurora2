@@ -128,6 +128,7 @@ class TicketDropdown(Select):
         super().__init__(placeholder="Selectează tipul de ticket 🎫", options=options)
 
     async def callback(self, interaction: discord.Interaction):
+    try:
         guild = interaction.guild
         category = discord.utils.get(guild.categories, name=TICKET_CATEGORY)
         if not category:
@@ -149,7 +150,10 @@ class TicketDropdown(Select):
         view = View()
         view.add_item(close_button)
 
-        await ticket_channel.send(f"🎫 Ticket creat de {interaction.user.mention}\nTip: **{self.values[0]}**", view=view)
+        await ticket_channel.send(
+            f"🎫 Ticket creat de {interaction.user.mention}\nTip: **{self.values[0]}**",
+            view=view
+        )
         await interaction.response.send_message(f"✅ Ticket creat: {ticket_channel.mention}", ephemeral=True)
 
         # Log ticket creation
@@ -164,6 +168,11 @@ class TicketDropdown(Select):
             embed.add_field(name="Deschis de", value=interaction.user.mention, inline=False)
             embed.add_field(name="Canal", value=ticket_channel.mention, inline=False)
             await log_channel.send(embed=embed)
+
+    except Exception as e:
+        print(f"Error in ticket dropdown callback: {e}")
+        if not interaction.response.is_done():
+            await interaction.response.send_message("❌ A apărut o eroare la crearea ticketului.", ephemeral=True)
 
 class TicketView(View):
     def __init__(self):
